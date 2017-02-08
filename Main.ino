@@ -11,7 +11,7 @@ enum SYSTEM_STATE system_state = READY;
 
 unsigned char valid_packet_number = 0;
 unsigned long trigger_time = 0;
-int csvEnabled = 0, csvRemote = 0;
+int csvEnabled = 0, csvLoggingEnabled = 0;
 
 // A small helper
 void error(const __FlashStringHelper*err) {
@@ -50,27 +50,29 @@ void loop(void)
     if(Serial1.available() > 0)
     {
         char in = Serial1.read();
-        while(Serial1.available()){
-            Serial1.read();
-        }
+
         switch (in)
          {
-            case 's':
+            case 'S':
                 system_state = RUNNING;
-                Serial1.println("RUNNING");
+                Serial1.println(RUNNING_MESSAGE);
             break;
-            case 'x':
+            case 'X':
                 system_state = READY;
-                resetSystem(); 
-                Serial1.println("READY");
+                resetSystem();
+                Serial1.println(READY_MESSAGE);
             break;
-            case 'r':
-                Serial1.println("RESET");
+            case 'R':
+                Serial1.println(RESET_MESSAGE);
                 resetSystem();
             break;
-            case 'e':
-                Serial1.println("CSV ENABLED");
-                csvRemote = 1;
+            case 'E':
+                Serial1.println(CSVLOG_MESSAGE);
+                csvLoggingEnabled = 1;
+            break;
+            case 'D':
+                Serial1.println(CSVDIS_MESSAGE);
+                csvLoggingEnabled = 0;
             break;
         }
     }
@@ -116,7 +118,7 @@ void loop(void)
     {
         if(trigger_time <= micros())
         {
-            if(ENABLE_SENSOR) watchGait();
+            if(ENABLE_SENSOR && !csvEnabled) watchGait();
 
             // Reset Trigger
             trigger_time = micros() + GAIT_PERIOD;
@@ -124,7 +126,7 @@ void loop(void)
             // Print the acceleration vectors
             if(csvEnabled && DEBUG)
                 printVectorCSV();
-            if(csvRemote)
+            if(csvLoggingEnabled)
                 printVectorCSVBluetooth();
         }
     }
@@ -132,11 +134,7 @@ void loop(void)
 }
 
 void resetSystem(){
-    csvEnabled = 0; csvRemote = 0;
+    csvEnabled = 0;
+    csvLoggingEnabled = 0;
     valid_packet_number = 0;
-}
-
-void sendStepMessage(unsigned long* stepDuration)
-{
-
 }
