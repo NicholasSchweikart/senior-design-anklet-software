@@ -55,6 +55,7 @@ void loop(void)
          {
             case 'S':
                 system_state = RUNNING;
+                resetSystem();
                 Serial1.println(RUNNING_MESSAGE);
             break;
             case 'X':
@@ -92,6 +93,7 @@ void loop(void)
              {
                 case 's':
                     system_state = RUNNING;
+                    resetSystem();
                     Serial.println("RUNNING");
                 break;
                 case 'x':
@@ -121,7 +123,7 @@ void loop(void)
             if(ENABLE_SENSOR && !csvEnabled) watchGait();
 
             // Reset Trigger
-            trigger_time = micros() + GAIT_PERIOD;
+            trigger_time = micros() + SAMPLING_PERIOD;
 
             // Print the acceleration vectors
             if(csvEnabled && DEBUG)
@@ -137,4 +139,5 @@ void resetSystem(){
     csvEnabled = 0;
     csvLoggingEnabled = 0;
     valid_packet_number = 0;
+    resetGait();
 }

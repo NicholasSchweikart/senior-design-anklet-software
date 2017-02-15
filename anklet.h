@@ -1,12 +1,14 @@
 #ifndef ANKLET_H
 #define ANKLET_H
 
-#define DEBUG                           1
+#define DEBUG                           0
 #define OFFLINE                         0
 #define ENABLE_SENSOR                   1
 
-#define GAIT_PERIOD                     20000
-#define SAMPLING_PERIOD                 200
+#define SAMPLING_PERIOD                 20000
+#define AVGING_RATE                     1000
+#define ALPHA                           .03
+#define ALPHA_I                         .97
 
 // Message Response Values
 #define RUNNING_MESSAGE                 "#U"

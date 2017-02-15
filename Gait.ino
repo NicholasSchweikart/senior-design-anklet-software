@@ -15,8 +15,9 @@
 
 Adafruit_BNO055 bno = Adafruit_BNO055();
 
-int samples = 0;
-double sum = 0.0;
+int samples = 0, updates = 0;
+double sum = 0.0, average = 0.0;
+double lastYAccel = 0.0;
 
 void initializeSensor()
 {
@@ -33,31 +34,31 @@ void initializeSensor()
 
 void watchGait()
 {
-    samples += 1;
-
-    if(samples == SAMPLING_PERIOD)
+    if(samples == AVGING_RATE)
     {
-        // Compute abs(average) and send to phone
-        double averageAcceleration = sum/SAMPLING_PERIOD;
-        if(averageAcceleration < 0)
-            averageAcceleration *= -1.0;
+        average = sum/samples;
+        if(average < 0.0){
+            average *= -1.0;
+        }
 
-        Serial1.println(averageAcceleration, 2);
-        if(DEBUG) Serial.println(averageAcceleration, 2);
-        // Reset all variables
-        sum = 0;
+        Serial1.println(average, 2);
+        if(DEBUG) Serial.println(average, 2);
         samples = 0;
-    }
-    else
-    {
-        imu::Vector<3> accelerationVector = NULL;
-        accelerationVector = bno.getVector(Adafruit_BNO055::VECTOR_LINEARACCEL);
-        double yAcceleration = accelerationVector.y();
-
-        // Compute sum
-        sum += yAcceleration;
+        sum = 0;
     }
 
+    imu::Vector<3> accelerationVector = NULL;
+    accelerationVector = bno.getVector(Adafruit_BNO055::VECTOR_LINEARACCEL);
+    double yA = accelerationVector.y();
+    // double xA = accelerationVector.x();
+    // double zA = accelerationVector.z();
+    // double output = sqrt(yA*yA + xA*xA + zA*zA);
+
+    // Compute filtered data.
+    lastYAccel = ALPHA * yA + ALPHA_I * lastYAccel;
+    
+    sum += lastYAccel;
+    samples += 1;
 }
 
 void printVectorCSV()
@@ -85,4 +86,8 @@ void printVectorCSVBluetooth()
     Serial1.print(x,2); Serial1.print(',');
     Serial1.print(y,2); Serial1.print(',');
     Serial1.println(z,2);
+}
+void resetGait(){
+    sum = 0;
+    samples = 0;
 }
