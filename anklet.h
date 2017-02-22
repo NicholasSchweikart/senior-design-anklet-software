@@ -6,9 +6,9 @@
 #define ENABLE_SENSOR                   1
 
 #define SAMPLING_PERIOD                 20000
-#define AVGING_RATE                     50
-#define ALPHA                           .001
-#define ALPHA_I                         .999
+#define AVGING_RATE                     25
+#define ALPHA                           .002
+#define ALPHA_I                         .998
 
 // Message Response Values
 #define RUNNING_MESSAGE                 "#U"

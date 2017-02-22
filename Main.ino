@@ -120,7 +120,7 @@ void loop(void)
     {
         if(trigger_time <= micros())
         {
-            if(ENABLE_SENSOR && !csvEnabled && !csvLoggingEnabled) watchGait();
+            if(ENABLE_SENSOR && !csvEnabled && !csvLoggingEnabled) watchGaitPeaks();
 
             // Reset Trigger
             trigger_time = micros() + SAMPLING_PERIOD;

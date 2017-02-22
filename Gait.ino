@@ -1,12 +1,12 @@
 /**
- * Gait analysis engine for the anklet
- * Connections
-   ===========
-   Connect SCL to analog 5
-   Connect SDA to analog 4
-   Connect VDD to 3.3V DC
-   Connect GROUND to common ground
- */
+* Gait analysis engine for the anklet
+* Connections
+===========
+Connect SCL to analog 5
+Connect SDA to analog 4
+Connect VDD to 3.3V DC
+Connect GROUND to common ground
+*/
 
 #include <Wire.h>
 #include <Adafruit_BNO055.h>
@@ -16,7 +16,7 @@
 Adafruit_BNO055 bno = Adafruit_BNO055();
 
 int samples = 0;
-double sum = 0.0, average = 0.0, lastY = 0.0;
+double sum = 0.0, average = 0.0, lastY = 0.0, minY = 0.0, lastSlope = 0.0;
 
 void initializeSensor()
 {
@@ -31,24 +31,52 @@ void initializeSensor()
     }
 }
 
-void watchGait()
+// void watchGait()
+// {
+//     if(samples == AVGING_RATE)
+//     {
+//         double output = 0.0;
+//         if(lastY < 0.0){
+//             output = lastY * -1.0;
+//         }
+//
+//         Serial1.println(output);
+//         if(DEBUG) Serial.println(output);
+//         samples = 0;
+//     }
+//
+//     imu::Vector<3> accelerationVector = NULL;
+//     accelerationVector = bno.getVector(Adafruit_BNO055::VECTOR_LINEARACCEL);
+//     lastY = ALPHA * accelerationVector.y() + ALPHA_I * lastY;
+//     samples += 1;
+// }
+
+void watchGaitPeaks()
 {
-    if(samples == AVGING_RATE)
-    {
-        double output = 0.0;
-        if(lastY < 0.0){
-            output = lastY * -1.0;
-        }
-
-        Serial1.println(output, 2);
-        if(DEBUG) Serial.println(output, 2);
-        samples = 0;
-    }
-
     imu::Vector<3> accelerationVector = NULL;
     accelerationVector = bno.getVector(Adafruit_BNO055::VECTOR_LINEARACCEL);
-    lastY = ALPHA * accelerationVector.y() + ALPHA_I * lastY;
-    samples += 1;
+    double y = accelerationVector.y();
+
+    if(y > -5.0)
+    {
+        y = 0;
+    }
+
+    if(y < minY)
+        minY = y;
+
+    double slope = y - lastY;
+    if(lastSlope < 0 && slope > 0)
+    {
+        if(minY < 0)
+            minY *= -1;
+        Serial1.println(minY);
+        if(DEBUG) Serial.println(minY);
+        minY = 0;
+    }
+    lastSlope = slope;
+    lastY = y;
+
 }
 
 void printVectorCSV()
@@ -79,4 +107,6 @@ void printVectorCSVBluetooth()
 }
 void resetGait(){
     lastY = 0.0;
+    minY = 0.0;
+    lastSlope = 0.0;
 }
