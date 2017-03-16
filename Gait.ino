@@ -1,12 +1,23 @@
 /**
- * Gait analysis engine for the anklet
- * Connections
-   ===========
-   Connect SCL to analog 5
-   Connect SDA to analog 4
-   Connect VDD to 3.3V DC
-   Connect GROUND to common ground
- */
+* Gait analysis engine for the Anklet
+*
+=========== Connections for BNO055 ================
+Connect SCL to analog 5
+Connect SDA to analog 4
+Connect VDD to 3.3V DC
+Connect GROUND to common ground
+*
+* ======== BNO055 Axis =========================
+* --------------     ----------------------------------------
+* |O   -x ^   O|     |                                      |
+* |       |   o|     |                                      |
+* | -y    |   o|     |             Micro Controller         |
+* |  <----Z   o|     |                                      |
+* |           o|     |                                      |
+* |O          O|     |                                      |
+* --------------     -----------------------------------------
+* ~Positive Z is out of screen.
+*/
 
 #include <Wire.h>
 #include <Adafruit_BNO055.h>
@@ -15,159 +26,110 @@
 
 Adafruit_BNO055 bno = Adafruit_BNO055();
 
-enum GAIT_STATE gaitState = WAIT_INIT_LIFT_OFF;
-
-char steps = 0;
-double lastYAccel = 0;
-
-unsigned long stepDuration = 0, blockTime = 0, averageStepDuration = 0;
+int samples = 0;
+double sum = 0.0, average = 0.0, lastY = 0.0, minY = 0.0, lastSlope = 0.0;
 
 void initializeSensor()
 {
-    /* Initialise the sensor */
-    if(!bno.begin())
-    {
-        /* There was a problem detecting the BNO055 ... check your connections */
-        Serial.print("Ooops, no BNO055 detected ... Check your wiring or I2C ADDR!");
-        while(1);
-    }else{
-        bno.setExtCrystalUse(true);
-    }
+  /* Initialise the sensor */
+  if(!bno.begin())
+  {
+    /* There was a problem detecting the BNO055 ... check your connections */
+    Serial.print("Ooops, no BNO055 detected ... Check your wiring or I2C ADDR!");
+    while(1);
+  }else{
+    bno.setExtCrystalUse(true);
+  }
 }
 
-void readAcceleration(double* y)
+/**
+* Func: Continually looks for peaks in the acceleration data comming in. When
+* a peak is detected, it will send off the MAXIMUM value of that peak over the
+* Bluetooth link.
+* NOTE: Always sends the ABS over the link
+*/
+void watchGaitPeaks()
 {
-    // Possible vector values can be:
-    // - VECTOR_ACCELEROMETER - m/s^2
-    // - VECTOR_MAGNETOMETER  - uT
-    // - VECTOR_GYROSCOPE     - rad/s
-    // - VECTOR_EULER         - degrees
-    // - VECTOR_LINEARACCEL   - m/s^2
-    // - VECTOR_GRAVITY       - m/s^2
-    imu::Vector<3> accel = NULL;
+  imu::Vector<3> accelerationVector = NULL;
+  accelerationVector = bno.getVector(Adafruit_BNO055::VECTOR_LINEARACCEL);
+  double y = accelerationVector.y();
 
-    accel = bno.getVector(Adafruit_BNO055::VECTOR_LINEARACCEL);
+  // Filter out noise below 5 m/s^2
+  if(y > -5.0)
+  {
+    y = 0;
+  }
 
-    *y = accel.y();
+  // Update the MINIMUM if necessary. Remeber MIN is the MAX because -Y is
+  // the upward axis.
+  if(y < minY)
+  minY = y;
 
-    return;
+  // Calculate the slope
+  double slope = y - lastY;
+
+  // If our slope switches signs, we mark a peak.
+  if(lastSlope < 0 && slope > 0)
+  {
+    if(minY < 0)
+    {
+      minY *= -1;
+    }
+
+    Serial1.println(minY);
+    if(DEBUG){ Serial.println(minY);}
+
+    // Reset minY to 0 for next measurement.
+    minY = 0;
+  }
+
+  lastSlope = slope;
+  lastY = y;
 }
 
-void watchGait()
-{
-    // block for Xms after changing states
-    if(blockTime)
-    {
-        if(micros() < blockTime)
-            return;
-        else
-            blockTime = 0;
-    }
-
-    double yAcceleration;
-    readAcceleration(&yAcceleration);
-
-    if(gaitState == WAIT_INIT_LIFT_OFF )
-    {
-        // Detect LIFT OFF
-        if(yAcceleration < LIFT_OFF_DETECTION_THRESHOLD)
-        {
-            // We have a HEEL_STRIKE_DETECTED so start monitoring
-            if(DEBUG == 2) Serial.println("Initial LIFT_OFF_DETECTED!");
-
-            // Get current time to start duration timer
-            stepDuration = micros();
-
-            // Block to filter out noisy spikes
-            blockTime = micros() + BLOCK_DURATION;
-
-            gaitState = SWING_PHASE;
-        }
-
-    }
-    else if (gaitState == SWING_PHASE)
-    {
-        // Detect HEEL STRIKE
-        if(yAcceleration < HEEL_STRIKE_DETECTION_THRESHOLD)
-        {
-            // Wait for HEEL STRIKE
-            if(DEBUG == 2) Serial.println("HEEL_STRIKE_DETECTED");
-
-            // Block to filter out noisy spikes
-            blockTime = micros() + BLOCK_DURATION;
-
-            gaitState = WAIT_LIFT_OFF;
-        }
-    }
-    else if (gaitState == WAIT_LIFT_OFF)
-    {
-        // Detect LIFT OFF
-        if(yAcceleration < LIFT_OFF_DETECTION_THRESHOLD)
-        {
-            // We have a HEEL_STRIKE_DETECTED so start monitoring
-            if(DEBUG == 2) Serial.println("LIFT_OFF_DETECTED: send step message");
-
-            // Get the time for the entire step
-            stepDuration = micros() - stepDuration;
-
-            // Send of the gait data, and reset everything
-            steps += 1;
-            averageStepDuration += stepDuration;
-
-            // Reset the timers
-            stepDuration = micros();
-
-            // Block to filter out noisy spikes
-            blockTime = micros() + BLOCK_DURATION;
-
-            gaitState = SWING_PHASE;
-        }
-    }
-
-    if(steps >= STEP_SAMPLE_SIZE)
-    {
-        averageStepDuration = averageStepDuration/STEP_SAMPLE_SIZE;
-        //sendStepMessage(&averageStepDuration);
-        steps = 0; averageStepDuration = 0;
-    }
-
-    if(gaitState > WAIT_INIT_LIFT_OFF)
-    {
-        // If stepDuration is larger than 2 seconds, take us back to idle.
-        if((micros() - stepDuration ) > MAX_STRIDE_TIME)
-        {
-            // Clear & Reset all the vars
-            stepDuration = 0;  steps = 0; averageStepDuration = 0;
-            gaitState = WAIT_INIT_LIFT_OFF;
-            if(DEBUG == 2) Serial.println("Detected stop of walk!");
-        }
-    }
-
-}
-
+/**
+* Func: Prints out the x,y,z acceleration values from the BNO055 over the
+* Serial Link.
+* Format: "X,Y,Z\n"
+*/
 void printVectorCSV()
 {
-    double y,x,z;
-    imu::Vector<3> accel = NULL;
+  double y,x,z;
+  imu::Vector<3> accel = NULL;
 
-    accel = bno.getVector(Adafruit_BNO055::VECTOR_LINEARACCEL);
-    y = accel.y();
-    x = accel.x();
-    z = accel.z();
-    Serial.print(x,2); Serial.print(',');
-    Serial.print(y,2); Serial.print(',');
-    Serial.println(z,2);
+  accel = bno.getVector(Adafruit_BNO055::VECTOR_LINEARACCEL);
+  y = accel.y();
+  x = accel.x();
+  z = accel.z();
+  Serial.print(x,2); Serial.print(',');
+  Serial.print(y,2); Serial.print(',');
+  Serial.println(z,2);
 }
+
+/**
+* Func: Prints out the x,y,z acceleration values from the BNO055 over the
+* Bluetooth link.
+* Format: "X,Y,Z\n"
+*/
 void printVectorCSVBluetooth()
 {
-    double y,x,z;
-    imu::Vector<3> accel = NULL;
+  double y = 0.0,x=0.0,z=0.0;
+  imu::Vector<3> accel = NULL;
 
-    accel = bno.getVector(Adafruit_BNO055::VECTOR_LINEARACCEL);
-    y = accel.y();
-    x = accel.x();
-    z = accel.z();
-    Serial1.print(x,2); Serial1.print(',');
-    Serial1.print(y,2); Serial1.print(',');
-    Serial1.println(z,2);
+  accel = bno.getVector(Adafruit_BNO055::VECTOR_LINEARACCEL);
+  y = accel.y();
+  x = accel.x();
+  z = accel.z();
+  Serial1.print(x,2); Serial1.print(',');
+  Serial1.print(y,2); Serial1.print(',');
+  Serial1.println(z,2);
+}
+
+/**
+* Func: Resets the variables for the gait data collection.
+*/
+void resetGait(){
+  lastY = 0.0;
+  minY = 0.0;
+  lastSlope = 0.0;
 }

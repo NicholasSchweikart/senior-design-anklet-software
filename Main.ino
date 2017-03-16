@@ -1,4 +1,3 @@
-
 #include <Arduino.h>
 #include "wiring_private.h" // pinPeripheral() function
 #include <SPI.h>
@@ -9,39 +8,42 @@
 
 enum SYSTEM_STATE system_state = READY;
 
-unsigned char valid_packet_number = 0;
-unsigned long trigger_time = 0;
-int csvEnabled = 0, csvRemote = 0;
+unsigned long trigger_time = 0;             // Holds micros for next trigger
+int csvEnabled = 0, csvLoggingEnabled = 0;  // Ouput control flags
 
-// A small helper
+// A small print helper
 void error(const __FlashStringHelper*err) {
   Serial.println(err);
   while (1);
 }
-/**************************************************************************/
-/*!
-    @brief  Sets up the HW an the BLE module (this function is called
-            automatically on startup)
-*/
-/**************************************************************************/
 
+/**
+ * Description: Does preliminary setup of device. Runs once at power up, or
+ * after reset.
+ * Args: void
+ */
 void setup(void)
 {
     if(DEBUG)
     {
-        while (!Serial);  // required for Flora & Micro
+        while (!Serial);  // wait for the serial to be ready
         delay(500);
 
         Serial.begin(115200);
-        Serial.println(F("Gait System Test Software"));
+        Serial.println(F("Gait System In DEBUG"));
         Serial.println(F("------------------------------------------------"));
         Serial.println("Waiting for connection...");
     }
     Serial1.begin(9600);
 
-    if(ENABLE_SENSOR) initializeSensor();
+    if(ENABLE_SENSOR) initializeSensor(); // Enable the BNO055
 }
 
+/**
+ * Description: Main loop that will run forever. It parses incomming commands
+ * from both Bluetooth and Seial. It also monitors the timer and runs the data
+ * processing at the specified frequency.
+ */
 void loop(void)
 {
     /**
@@ -50,27 +52,38 @@ void loop(void)
     if(Serial1.available() > 0)
     {
         char in = Serial1.read();
-        while(Serial1.available()){
-            Serial1.read();
-        }
         switch (in)
          {
-            case 's':
+            // Start command
+            case 'S':
                 system_state = RUNNING;
-                Serial1.println("RUNNING");
+                resetSystem();
+                Serial1.println(RUNNING_MESSAGE);
             break;
-            case 'x':
+
+            // Stop command.
+            case 'X':
                 system_state = READY;
-                resetSystem(); 
-                Serial1.println("READY");
+                resetSystem();
+                Serial1.println(READY_MESSAGE);
             break;
-            case 'r':
-                Serial1.println("RESET");
+
+            // Reset command
+            case 'R':
+                Serial1.println(RESET_MESSAGE);
                 resetSystem();
             break;
-            case 'e':
-                Serial1.println("CSV ENABLED");
-                csvRemote = 1;
+
+            // Enable CSV output command
+            case 'E':
+                Serial1.println(CSVLOG_MESSAGE);
+                csvLoggingEnabled = 1;
+            break;
+
+            // Disable CSV output command
+            case 'D':
+                Serial1.println(CSVDIS_MESSAGE);
+                csvLoggingEnabled = 0;
             break;
         }
     }
@@ -88,20 +101,21 @@ void loop(void)
             }
             switch (in)
              {
-                case 's':
+                case 'S':
                     system_state = RUNNING;
+                    resetSystem();
                     Serial.println("RUNNING");
                 break;
-                case 'x':
+                case 'X':
                     system_state = READY;
                     resetSystem();
                     Serial.println("READY");
                 break;
-                case 'r':
+                case 'R':
                     Serial.println("RESET");
                     resetSystem();
                 break;
-                case 'e':
+                case 'E':
                     Serial.println("CSV ENABLED");
                     csvEnabled = 1;
                 break;
@@ -110,33 +124,34 @@ void loop(void)
     }
 
     /**
-     * Run the main processing loop at 50 HZ
+     * Run the main processing at 50 HZ
      */
     if(system_state == RUNNING)
     {
         if(trigger_time <= micros())
         {
-            if(ENABLE_SENSOR) watchGait();
+            if(ENABLE_SENSOR && !csvEnabled && !csvLoggingEnabled)
+              watchGaitPeaks();
 
             // Reset Trigger
-            trigger_time = micros() + GAIT_PERIOD;
+            trigger_time = micros() + SAMPLING_PERIOD;
 
-            // Print the acceleration vectors
+            // Print the acceleration vectors if applicable
             if(csvEnabled && DEBUG)
                 printVectorCSV();
-            if(csvRemote)
+
+            if(csvLoggingEnabled)
                 printVectorCSVBluetooth();
         }
     }
 
 }
 
+/**
+ * Func: Resets the flags for the system main loop 
+ */
 void resetSystem(){
-    csvEnabled = 0; csvRemote = 0;
-    valid_packet_number = 0;
-}
-
-void sendStepMessage(unsigned long* stepDuration)
-{
-
+    csvEnabled = 0;
+    csvLoggingEnabled = 0;
+    resetGait();
 }
