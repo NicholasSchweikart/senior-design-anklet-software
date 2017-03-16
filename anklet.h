@@ -1,14 +1,16 @@
+/**
+ * Header file for Gait-Pro Anklet software.
+ */
 #ifndef ANKLET_H
 #define ANKLET_H
 
-#define DEBUG                           0
-#define OFFLINE                         0
-#define ENABLE_SENSOR                   1
 
-#define SAMPLING_PERIOD                 20000
-#define AVGING_RATE                     25
-#define ALPHA                           .002
-#define ALPHA_I                         .998
+#define DEBUG                           0       // Enable Debug Output
+#define OFFLINE                         0       // Enable Use w/o Bluetooth
+#define ENABLE_SENSOR                   1       // Enable BNO550
+
+#define SAMPLING_PERIOD                 20000   // Period of data sampline
+#define AVGING_RATE                     25      // Samples to take before averaging
 
 // Message Response Values
 #define RUNNING_MESSAGE                 "#U"
@@ -22,7 +24,6 @@ enum SYSTEM_STATE
     READY,
     RUNNING
 };
-
 
 // Function prototypes
 void sendStepMessage(unsigned long* stepDuration);
