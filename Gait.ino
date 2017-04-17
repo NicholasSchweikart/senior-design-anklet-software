@@ -63,7 +63,7 @@ void watchGaitPeaks()
   // Update the MINIMUM if necessary. Remeber MIN is the MAX because -Y is
   // the upward axis.
   if(y < minY)
-  minY = y;
+    minY = y;
 
   // Calculate the slope
   double slope = y - lastY;
